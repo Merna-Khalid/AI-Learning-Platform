@@ -1,0 +1,110 @@
+services:
+  # FastAPI backend service
+  backend:
+    build: ./backend
+    container_name: ai-learning-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - weaviate
+      - postgres
+      - llm
+    environment:
+      - WEAVIATE_URL=http://weaviate-db:8080
+      - POSTGRES_DB=ai_learning_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_HOST=postgres
+      - LLM_URL=http://llm:8081
+    networks:
+      - ai-network
+
+  # Weaviate vector database
+  weaviate:
+    container_name: weaviate-db
+    image: cr.weaviate.io/semitechnologies/weaviate:1.32.9
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    restart: on-failure:0
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    environment:
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
+      - CLUSTER_HOSTNAME=node1
+    networks:
+      - ai-network
+
+  # Postgres relational database
+  postgres:
+    container_name: postgres-db
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=ai_learning_db
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    networks:
+      - ai-network
+
+  # Local LLM server (Gemma via llama.cpp)
+  llm:
+    container_name: gemma-llm-server
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    restart: unless-stopped
+    volumes:
+      - ./backend/llm/gemma3n:/models:ro
+    command: >
+      -m /models/gemma-3n-E2B-it-Q2_K.gguf
+      --host 0.0.0.0
+      --port 8081
+      --ctx-size 2048
+      --n-gpu-layers 8
+    ports:
+      - "8081:8081"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - ai-network
+
+    # Secure code execution engine
+  code-executor:
+    container_name: code-executor
+    build: 
+      context: ./code-executor
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./code-executor/tmp:/tmp:rw
+    environment:
+      - MAX_EXECUTION_TIME=10
+      - MEMORY_LIMIT=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    networks:
+      - ai-network
+
+volumes:
+  weaviate_data:
+  postgres_data:
+
+networks:
+  ai-network:
+    driver: bridge
