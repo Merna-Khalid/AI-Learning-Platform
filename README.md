@@ -25,6 +25,8 @@ The entire application is built on a containerized microservice architecture, in
 
     * **Quizzes:** Creates timed, structured exams for formal assessment and progress tracking.
     ![Quiz](assets/AITeacher-exercise.png)
+    ![Quiz](assets/QuizResult.png)
+    ![Quiz](assets/IncorrectAnswers.png)
 
 
 
